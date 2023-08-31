@@ -1,0 +1,11 @@
+git add .
+git commit -m "backend: update league"
+git push
+git push heroku HEAD:master
+env GIT_SSL_NO_VERIFY=true git push heroku HEAD:master
+
+
+
+heroku logs -a football-screener --tail
+heroku run bash -a football-screener
+heroku ps:copy /app/matches.pkl --app=football-screener --output=./matches.pkl

@@ -1,0 +1,23 @@
+{
+  "name": "football-screener",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "flask": "venv/bin/flask run --no-debugger",
+    "react": "venv/bin/flask run --no-debugger",
+    "start": "react-scripts start"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wingskh/football-screener.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/wingskh/football-screener/issues"
+  },
+  "homepage": "https://github.com/wingskh/football-screener#readme"
+}

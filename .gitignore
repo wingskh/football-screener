@@ -1,0 +1,8 @@
+frontend/node_modules/
+venv/
+matches_from_heroku.pkl
+*.parquet
+.vscode/
+__pycache__/
+config/s3_connection.env
+*.pkl
