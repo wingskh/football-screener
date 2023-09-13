@@ -454,7 +454,7 @@ export default function App() {
                           {row.reversedCount}
                         </StyledTableCell>
                         <StyledTableCell align="right">
-                          {row.reversedHome}
+                          <pre>{row.reversedHome}</pre>
                         </StyledTableCell>
                         <StyledTableCell align="right">
                           <pre>{row.reversedAway}</pre>
