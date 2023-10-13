@@ -19,6 +19,7 @@ import s3fs
 import fastparquet as fp
 import schedule
 from handicap_translate import handicap_zh2str
+from scrapy import start_scrapy
 
 def connect_to_s3():
     fs = s3fs.S3FileSystem(
@@ -474,6 +475,7 @@ if __name__ == "__main__":
     socketio.run(
         app, host="0.0.0.0", debug=True, port=int(os.environ.get("PORT", 5000))
     )
+    start_scrapy()
     while True:
         schedule.run_pending()
         time.sleep(3600)

@@ -16,8 +16,9 @@ load_dotenv(dotenv_path='./config/s3_connection.env')
 import fastparquet as fp
 from handicap_translate import handicap_zh2str
 from bs4 import BeautifulSoup
-from requests_html import AsyncHTMLSession, HTMLSession
+from requests_html import AsyncHTMLSession
 import numpy as np
+import s3fs
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -26,6 +27,17 @@ from selenium.webdriver.support.ui import Select
 import pickle
 # pd.options.display.max_columns = 24
 
+def connect_to_s3():
+    fs = s3fs.S3FileSystem(
+        anon=False,
+        use_ssl=True,
+        client_kwargs={
+            "aws_access_key_id": os.environ['S3_ACCESS_KEY'],
+            "aws_secret_access_key": os.environ['S3_SECRET_KEY'],
+            "verify": True,
+        }
+    )
+    return fs
 
 def convert_word_to_num(num_str):
     num = 0
@@ -609,21 +621,23 @@ company_id_to_name = {
 }
 temp_info = {}
 
+def start_scrapy():
+    s3_bucket = 'football-screener/data'
+    fs = connect_to_s3()
 
-import warnings
-warnings.filterwarnings('ignore')
-collected_date = [date[:-4] for date in os.listdir('data')]
-cur_datetime = datetime.now()
-delta = dt.timedelta(days=1)
-min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
-target_date = datetime.strptime(min_date, '%Y%m%d') - delta
-# target_date = dt.date(2023, 10, 9)
-while True:
-    formatted_date = target_date.strftime('%Y%m%d')
-    matches_info = get_latest_odds(formatted_date)
-    with open(os.path.join('data', f'{formatted_date}.pkl'), 'wb') as file:
-        pickle.dump(matches_info, file)
-    target_date -= delta
+    collected_date = [date[:-4] for date in os.listdir('data')]
+    cur_datetime = datetime.now()
+    delta = dt.timedelta(days=1)
+    min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
+    target_date = datetime.strptime(min_date, '%Y%m%d') - delta
+    target_date = dt.date(2022, 2, 1)
+    while True:
+        formatted_date = target_date.strftime('%Y%m%d')
+        matches_info = get_latest_odds(formatted_date)
+        # with open(os.path.join('data', f'{formatted_date}.pkl'), 'wb') as file:
+        #     pickle.dump(matches_info, file)
 
-# with open('data.pkl', 'wb') as file:
-#     pickle.dump(data, file)
+        pickle.dump(matches_info, fs.open(f's3://{s3_bucket}/{formatted_date}.pkl', 'wb'))
+        # with open('data/20230925.pkl', 'rb') as file:
+        #     matches_info = pickle.load(file)
+        target_date -= delta
