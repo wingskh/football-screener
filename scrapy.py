@@ -14,8 +14,6 @@ import pytz
 from dotenv import load_dotenv
 load_dotenv(dotenv_path='./config/s3_connection.env')
 import fastparquet as fp
-from handicap_translate import handicap_zh2str
-from bs4 import BeautifulSoup
 from requests_html import AsyncHTMLSession
 import numpy as np
 import s3fs
