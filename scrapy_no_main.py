@@ -627,11 +627,11 @@ temp_info = {}
 s3_bucket = 'football-screener/data'
 fs = connect_to_s3()
 
-collected_date = [date[:-4] for date in os.listdir('data')]
-cur_datetime = datetime.now()
+# collected_date = [date[:-4] for date in os.listdir('data')]
+# cur_datetime = datetime.now()
 delta = dt.timedelta(days=1)
-min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
-target_date = datetime.strptime(min_date, '%Y%m%d') - delta
+# min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
+# target_date = datetime.strptime(min_date, '%Y%m%d') - delta
 target_date = dt.date(2022, 2, 1)
 while True:
     formatted_date = target_date.strftime('%Y%m%d')
