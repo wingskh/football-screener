@@ -23,6 +23,7 @@ from selenium.webdriver.common.by import By
 import chromedriver_autoinstaller
 from selenium.webdriver.support.ui import Select
 import pickle
+from selenium.webdriver.chrome.service import Service
 from selenium import webdriver
 # pd.options.display.max_columns = 24
 
@@ -178,7 +179,8 @@ def get_recent_data(match_id):
     options.add_argument("--headless") #無頭模式
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--no-sandbox")
-    driver = webdriver.Chrome(executable_path=os.environ.get("CHROMEDRIVER_PATH"), options=options)
+    service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
+    driver = webdriver.Chrome(service=service, options=options)
     driver.get(url)
     while True:
         try:

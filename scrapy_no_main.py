@@ -178,7 +178,8 @@ def get_recent_data(match_id):
     options.add_argument("--headless") #無頭模式
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--no-sandbox")
-    driver = webdriver.Chrome(executable_path=os.environ.get("CHROMEDRIVER_PATH"), options=options)
+    service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
+    driver = webdriver.Chrome(service=service, options=options)
     driver.get(url)
     while True:
         try:
