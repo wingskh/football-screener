@@ -512,7 +512,11 @@ def get_latest_odds(date):
     print("starting...", url)
     response = requests_fetch(url, headers=headers)
     soup = BeautifulSoup(response.content.decode("GB18030"), "html.parser")
-    daily_match_data = [[x.text for x in row.find_all('td')] + [row['sid']] for row in soup.find("table", {"id": "table_live"}).select('tr[sid]')]
+    daily_match_data = [[x.text.strip() for x in row.find_all('td')] + [row['sid']] for row in soup.find("table", {"id": "table_live"}).select('tr[sid]')]
+    if len(daily_match_data) == 0:
+        temp_daily_match_data = [row.find_all('td') for row in soup.find("table", {"id": "table_live"}).select('tr[infoid]')][1:]
+        daily_match_data = [[x.text.strip() for x in row[:-1]] + [re.search(r'\((.*?)\)', row[-1].select('a:contains("析")')[0]['onclick']).group(1)] for row in temp_daily_match_data]
+
     target_league = pd.read_csv("config/league.csv", header=None, encoding="utf8")
     target_league = target_league[target_league[0].notna()][0].unique().tolist()
 
