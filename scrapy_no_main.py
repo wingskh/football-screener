@@ -24,6 +24,7 @@ import chromedriver_autoinstaller
 from selenium.webdriver.support.ui import Select
 import pickle
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 # pd.options.display.max_columns = 24
 
 
