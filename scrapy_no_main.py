@@ -360,7 +360,7 @@ def get_had_df(match_id):
     return had_df
 
 
-def get_handicap_odds(match_id, match_info=[]):
+def get_handicap_odds(match_id, home_team, away_team, match_info=[]):
     url = f"https://vip.titan007.com/AsianOdds_n.aspx?id={match_id}&l=1"
     headers = {
         "authority": "vip.titan007.com",
@@ -382,13 +382,13 @@ def get_handicap_odds(match_id, match_info=[]):
 
     response = requests_fetch(url, headers=headers)
     print(
-        f"API: Company List Response Status: {response.status_code} ; {match_id} {match_info}"
+        f"API: Company List Response Status: {response.status_code} ; {match_id} {home_team} {away_team} {match_info}"
     )
     soup = BeautifulSoup(response.text, "html.parser")
-    home_team = [x.text for x in soup.select('.home') if len(x)][0]
-    is_home_field = False if '(中)' in home_team else True
-    home_team = re.sub(r'\([^)]+\)', '', home_team).strip()
-    away_team = [x.text for x in soup.select('.guest') if len(x)][0].strip()
+    # home_team = [x.text for x in soup.select('.home') if len(x)][0]
+    # is_home_field = False if '(中)' in home_team else True
+    # home_team = re.sub(r'\([^)]+\)', '', home_team).strip()
+    # away_team = [x.text for x in soup.select('.guest') if len(x)][0].strip()
 
     match_time = datetime.strptime(soup.find("span", {"class": "time"}).text.split('\xa0')[0], "%Y-%m-%d %H:%M")
     handicap_table = soup.find("table", {"id": "odds"})
@@ -548,8 +548,9 @@ def get_latest_odds(date):
     temp_info['matches'] = matches
     for match in matches:
         match_id = match[-1]
+        recent_data = get_recent_data(match_id)
         handicap_info = get_handicap_odds(
-            match_id, f"{match[0]} {match[3]} {match[5]}"
+            match_id, recent_data['home_team'], recent_data['away_team'], match[5]
         )
         matches_info[match_id] = {
             "matchTime": handicap_info['match_time'],
@@ -560,7 +561,6 @@ def get_latest_odds(date):
         if matches_info[match_id]['had'] is None:
             del matches_info[match_id]
             continue
-        recent_data = get_recent_data(match_id)
         matches_info[match_id]['recent_data'] = recent_data['recent_data'] 
         matches_info[match_id]['is_home_field'] = recent_data['is_home_field']
         matches_info[match_id]['league'] = recent_data['league']

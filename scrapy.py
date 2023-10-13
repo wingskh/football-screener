@@ -23,8 +23,8 @@ from selenium.webdriver.common.by import By
 import chromedriver_autoinstaller
 from selenium.webdriver.support.ui import Select
 import pickle
-from selenium.webdriver.chrome.service import Service
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 # pd.options.display.max_columns = 24
 
 
@@ -194,8 +194,8 @@ def get_recent_data(match_id):
                 break
             print("refetch driver...", url)
             time.sleep(5)
-        except:
-            print('get_recent_data error...', )
+        except  Exception as e:
+            print('get_recent_data error...', e)
         driver.refresh()
 
     home_team = driver.find_element(By.CLASS_NAME, "home").text.strip()
@@ -360,7 +360,7 @@ def get_had_df(match_id):
     return had_df
 
 
-def get_handicap_odds(match_id, match_info=[]):
+def get_handicap_odds(match_id, home_team, away_team, match_info=[]):
     url = f"https://vip.titan007.com/AsianOdds_n.aspx?id={match_id}&l=1"
     headers = {
         "authority": "vip.titan007.com",
@@ -382,13 +382,13 @@ def get_handicap_odds(match_id, match_info=[]):
 
     response = requests_fetch(url, headers=headers)
     print(
-        f"API: Company List Response Status: {response.status_code} ; {match_id} {match_info}"
+        f"API: Company List Response Status: {response.status_code} ; {match_id} {home_team} {away_team} {match_info}"
     )
     soup = BeautifulSoup(response.text, "html.parser")
-    home_team = [x.text for x in soup.select('.home') if len(x)][0]
-    is_home_field = False if '(中)' in home_team else True
-    home_team = re.sub(r'\([^)]+\)', '', home_team).strip()
-    away_team = [x.text for x in soup.select('.guest') if len(x)][0].strip()
+    # home_team = [x.text for x in soup.select('.home') if len(x)][0]
+    # is_home_field = False if '(中)' in home_team else True
+    # home_team = re.sub(r'\([^)]+\)', '', home_team).strip()
+    # away_team = [x.text for x in soup.select('.guest') if len(x)][0].strip()
 
     match_time = datetime.strptime(soup.find("span", {"class": "time"}).text.split('\xa0')[0], "%Y-%m-%d %H:%M")
     handicap_table = soup.find("table", {"id": "odds"})
@@ -548,8 +548,9 @@ def get_latest_odds(date):
     temp_info['matches'] = matches
     for match in matches:
         match_id = match[-1]
+        recent_data = get_recent_data(match_id)
         handicap_info = get_handicap_odds(
-            match_id, f"{match[0]} {match[3]} {match[5]}"
+            match_id, recent_data['home_team'], recent_data['away_team'], match[5]
         )
         matches_info[match_id] = {
             "matchTime": handicap_info['match_time'],
@@ -560,7 +561,6 @@ def get_latest_odds(date):
         if matches_info[match_id]['had'] is None:
             del matches_info[match_id]
             continue
-        recent_data = get_recent_data(match_id)
         matches_info[match_id]['recent_data'] = recent_data['recent_data'] 
         matches_info[match_id]['is_home_field'] = recent_data['is_home_field']
         matches_info[match_id]['league'] = recent_data['league']
@@ -569,6 +569,29 @@ def get_latest_odds(date):
 
     temp_info['matches_info'] = matches_info
     return matches_info
+
+
+def start_scrapy():
+    s3_bucket = 'football-screener/data'
+    fs = connect_to_s3()
+
+    # collected_date = [date[:-4] for date in os.listdir('data')]
+    # cur_datetime = datetime.now()
+    delta = dt.timedelta(days=1)
+    # min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
+    # target_date = datetime.strptime(min_date, '%Y%m%d') - delta
+    target_date = dt.date(2022, 2, 1)
+    while True:
+        formatted_date = target_date.strftime('%Y%m%d')
+        matches_info = get_latest_odds(formatted_date)
+        # with open(os.path.join('data', f'{formatted_date}.pkl'), 'wb') as file:
+        #     pickle.dump(matches_info, file)
+
+        pickle.dump(matches_info, fs.open(f's3://{s3_bucket}/{formatted_date}.pkl', 'wb'))
+        # with open('data/20230925.pkl', 'rb') as file:
+        #     matches_info = pickle.load(file)
+        target_date -= delta
+
 
 chromedriver_autoinstaller.install()
 company_to_info = {
@@ -629,24 +652,3 @@ company_id_to_name = {
     '48': '香港马*',
 }
 temp_info = {}
-
-def start_scrapy():
-    s3_bucket = 'football-screener/data'
-    fs = connect_to_s3()
-
-    # collected_date = [date[:-4] for date in os.listdir('data')]
-    # cur_datetime = datetime.now()
-    delta = dt.timedelta(days=1)
-    # min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
-    # target_date = datetime.strptime(min_date, '%Y%m%d') - delta
-    target_date = dt.date(2022, 2, 1)
-    while True:
-        formatted_date = target_date.strftime('%Y%m%d')
-        matches_info = get_latest_odds(formatted_date)
-        # with open(os.path.join('data', f'{formatted_date}.pkl'), 'wb') as file:
-        #     pickle.dump(matches_info, file)
-
-        pickle.dump(matches_info, fs.open(f's3://{s3_bucket}/{formatted_date}.pkl', 'wb'))
-        # with open('data/20230925.pkl', 'rb') as file:
-        #     matches_info = pickle.load(file)
-        target_date -= delta
