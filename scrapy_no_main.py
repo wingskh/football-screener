@@ -624,23 +624,22 @@ company_id_to_name = {
 }
 temp_info = {}
 
-def start_scrapy():
-    s3_bucket = 'football-screener/data'
-    fs = connect_to_s3()
+s3_bucket = 'football-screener/data'
+fs = connect_to_s3()
 
-    collected_date = [date[:-4] for date in os.listdir('data')]
-    cur_datetime = datetime.now()
-    delta = dt.timedelta(days=1)
-    min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
-    target_date = datetime.strptime(min_date, '%Y%m%d') - delta
-    target_date = dt.date(2022, 2, 1)
-    while True:
-        formatted_date = target_date.strftime('%Y%m%d')
-        matches_info = get_latest_odds(formatted_date)
-        # with open(os.path.join('data', f'{formatted_date}.pkl'), 'wb') as file:
-        #     pickle.dump(matches_info, file)
+collected_date = [date[:-4] for date in os.listdir('data')]
+cur_datetime = datetime.now()
+delta = dt.timedelta(days=1)
+min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
+target_date = datetime.strptime(min_date, '%Y%m%d') - delta
+target_date = dt.date(2022, 2, 1)
+while True:
+    formatted_date = target_date.strftime('%Y%m%d')
+    matches_info = get_latest_odds(formatted_date)
+    # with open(os.path.join('data', f'{formatted_date}.pkl'), 'wb') as file:
+    #     pickle.dump(matches_info, file)
 
-        pickle.dump(matches_info, fs.open(f's3://{s3_bucket}/{formatted_date}.pkl', 'wb'))
-        # with open('data/20230925.pkl', 'rb') as file:
-        #     matches_info = pickle.load(file)
-        target_date -= delta
+    pickle.dump(matches_info, fs.open(f's3://{s3_bucket}/{formatted_date}.pkl', 'wb'))
+    # with open('data/20230925.pkl', 'rb') as file:
+    #     matches_info = pickle.load(file)
+    target_date -= delta
