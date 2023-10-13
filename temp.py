@@ -14,19 +14,31 @@ import pytz
 from dotenv import load_dotenv
 load_dotenv(dotenv_path='./config/s3_connection.env')
 import fastparquet as fp
-from handicap_translate import handicap_zh2str
-from bs4 import BeautifulSoup
-from requests_html import AsyncHTMLSession, HTMLSession
+from requests_html import AsyncHTMLSession
 import numpy as np
+import s3fs
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 import chromedriver_autoinstaller
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import Select
 import pickle
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 # pd.options.display.max_columns = 24
 
+
+def connect_to_s3():
+    fs = s3fs.S3FileSystem(
+        anon=False,
+        use_ssl=True,
+        client_kwargs={
+            "aws_access_key_id": os.environ['S3_ACCESS_KEY'],
+            "aws_secret_access_key": os.environ['S3_SECRET_KEY'],
+            "verify": True,
+        }
+    )
+    return fs
 
 def convert_word_to_num(num_str):
     num = 0
@@ -163,9 +175,20 @@ def format_recent_df(selected_recent_data_df, home_team):
 def get_recent_data(match_id):
     url = f"https://zq.titan007.com/analysis/{match_id}.htm"
     options = Options()
-    options.add_argument("--headless")
+    # options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
+    options.add_argument("--headless") #無頭模式
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-sandbox")
+    # service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
     driver = webdriver.Chrome(options=options)
-    driver.get(url)
+    redirected = False
+    while not redirected:
+        try:
+            driver.get(url)
+            redirected = True
+        except:
+            print('Error in chromiun redirect...')
+            
     while True:
         try:
             temp_info['page_source'] = driver.page_source
@@ -178,8 +201,8 @@ def get_recent_data(match_id):
                 break
             print("refetch driver...", url)
             time.sleep(5)
-        except:
-            pass
+        except  Exception as e:
+            print('get_recent_data error...', e)
         driver.refresh()
 
     home_team = driver.find_element(By.CLASS_NAME, "home").text.strip()
@@ -344,7 +367,7 @@ def get_had_df(match_id):
     return had_df
 
 
-def get_handicap_odds(match_id, match_info=[]):
+def get_handicap_odds(match_id, home_team, away_team, match_info=[]):
     url = f"https://vip.titan007.com/AsianOdds_n.aspx?id={match_id}&l=1"
     headers = {
         "authority": "vip.titan007.com",
@@ -366,13 +389,13 @@ def get_handicap_odds(match_id, match_info=[]):
 
     response = requests_fetch(url, headers=headers)
     print(
-        f"API: Company List Response Status: {response.status_code} ; {match_id} {match_info}"
+        f"API: Company List Response Status: {response.status_code} ; {match_id} {home_team} {away_team} {match_info}"
     )
     soup = BeautifulSoup(response.text, "html.parser")
-    home_team = [x.text for x in soup.select('.home') if len(x)][0]
-    is_home_field = False if '(中)' in home_team else True
-    home_team = re.sub(r'\([^)]+\)', '', home_team).strip()
-    away_team = [x.text for x in soup.select('.guest') if len(x)][0].strip()
+    # home_team = [x.text for x in soup.select('.home') if len(x)][0]
+    # is_home_field = False if '(中)' in home_team else True
+    # home_team = re.sub(r'\([^)]+\)', '', home_team).strip()
+    # away_team = [x.text for x in soup.select('.guest') if len(x)][0].strip()
 
     match_time = datetime.strptime(soup.find("span", {"class": "time"}).text.split('\xa0')[0], "%Y-%m-%d %H:%M")
     handicap_table = soup.find("table", {"id": "odds"})
@@ -489,8 +512,11 @@ def get_odds_list(odds_url, home_team, away_team, match_time):
 
     odds_table = pd.DataFrame(selected_trs[1:], columns=selected_trs[0])
     odds_table = odds_table.assign(numeric_handicap_line=odds_table['盘口'].apply(convert_handicap_string_to_float))
-    odds_table.rename({home_team: '主', away_team: '客'}, axis=1, inplace=True)
-    odds_table = odds_table[["主", "盘口", "客", "变化时间", "状态", "numeric_handicap_line"]]
+    # odds_table.rename({home_team: '主', away_team: '客'}, axis=1, inplace=True)
+    # print(odds_table)
+    odds_table = odds_table.iloc[:, -6:]
+    odds_table.columns = ["主", "盘口", "客", "变化时间", "状态", "numeric_handicap_line"]
+    # odds_table = odds_table[["主", "盘口", "客", "变化时间", "状态", "numeric_handicap_line"]]
     return odds_table.values.tolist()
 
 
@@ -532,8 +558,9 @@ def get_latest_odds(date):
     temp_info['matches'] = matches
     for match in matches:
         match_id = match[-1]
+        recent_data = get_recent_data(match_id)
         handicap_info = get_handicap_odds(
-            match_id, f"{match[0]} {match[3]} {match[5]}"
+            match_id, recent_data['home_team'], recent_data['away_team'], match[5]
         )
         matches_info[match_id] = {
             "matchTime": handicap_info['match_time'],
@@ -544,7 +571,6 @@ def get_latest_odds(date):
         if matches_info[match_id]['had'] is None:
             del matches_info[match_id]
             continue
-        recent_data = get_recent_data(match_id)
         matches_info[match_id]['recent_data'] = recent_data['recent_data'] 
         matches_info[match_id]['is_home_field'] = recent_data['is_home_field']
         matches_info[match_id]['league'] = recent_data['league']
@@ -553,6 +579,28 @@ def get_latest_odds(date):
 
     temp_info['matches_info'] = matches_info
     return matches_info
+
+
+def start_scrapy():
+    s3_bucket = 'football-screener/data'
+    fs = connect_to_s3()
+
+    # collected_date = [date[:-4] for date in os.listdir('data')]
+    # cur_datetime = datetime.now()
+    delta = dt.timedelta(days=1)
+    # min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
+    # target_date = datetime.strptime(min_date, '%Y%m%d') - delta
+    target_date = dt.date(2022, 2, 1)
+    while True:
+        formatted_date = target_date.strftime('%Y%m%d')
+        matches_info = get_latest_odds(formatted_date)
+        # with open(os.path.join('data', f'{formatted_date}.pkl'), 'wb') as file:
+        #     pickle.dump(matches_info, file)
+
+        pickle.dump(matches_info, fs.open(f's3://{s3_bucket}/{formatted_date}.pkl', 'wb'))
+        # with open('data/20230925.pkl', 'rb') as file:
+        #     matches_info = pickle.load(file)
+        target_date -= delta
 
 chromedriver_autoinstaller.install()
 company_to_info = {

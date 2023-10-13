@@ -505,8 +505,11 @@ def get_odds_list(odds_url, home_team, away_team, match_time):
 
     odds_table = pd.DataFrame(selected_trs[1:], columns=selected_trs[0])
     odds_table = odds_table.assign(numeric_handicap_line=odds_table['盘口'].apply(convert_handicap_string_to_float))
-    odds_table.rename({home_team: '主', away_team: '客'}, axis=1, inplace=True)
-    odds_table = odds_table[["主", "盘口", "客", "变化时间", "状态", "numeric_handicap_line"]]
+    # odds_table.rename({home_team: '主', away_team: '客'}, axis=1, inplace=True)
+    # print(odds_table)
+    odds_table = odds_table.iloc[:, -6:]
+    odds_table.columns = ["主", "盘口", "客", "变化时间", "状态", "numeric_handicap_line"]
+    # odds_table = odds_table[["主", "盘口", "客", "变化时间", "状态", "numeric_handicap_line"]]
     return odds_table.values.tolist()
 
 
