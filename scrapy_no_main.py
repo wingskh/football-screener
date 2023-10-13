@@ -192,8 +192,9 @@ def get_recent_data(match_id):
                 break
             print("refetch driver...", url)
             time.sleep(5)
-        except:
-            pass
+        except  Exception as e:
+            print('get_recent_data error...', e)
+            print(driver.page_source)
         driver.refresh()
 
     home_team = driver.find_element(By.CLASS_NAME, "home").text.strip()
