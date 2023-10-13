@@ -24,11 +24,8 @@ import chromedriver_autoinstaller
 from selenium.webdriver.support.ui import Select
 import pickle
 from selenium import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
 # pd.options.display.max_columns = 24
 
-# Install Chrome WebDriver
-webdriver.Chrome(ChromeDriverManager().install())
 
 def connect_to_s3():
     fs = s3fs.S3FileSystem(
@@ -177,8 +174,11 @@ def format_recent_df(selected_recent_data_df, home_team):
 def get_recent_data(match_id):
     url = f"https://zq.titan007.com/analysis/{match_id}.htm"
     options = Options()
-    options.add_argument("--headless")
-    driver = webdriver.Chrome(options=options)
+    options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
+    options.add_argument("--headless") #無頭模式
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-sandbox")
+    driver = webdriver.Chrome(executable_path=os.environ.get("CHROMEDRIVER_PATH"), options=options)
     driver.get(url)
     while True:
         try:
