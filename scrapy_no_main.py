@@ -181,8 +181,11 @@ def get_recent_data(match_id):
     url = f"https://zq.titan007.com/analysis/{match_id}.htm"
     options = Options()
     options.add_argument("--headless")
-    options.add_argument("--disable-dev-shm-usage")
+    # options.add_argument("--disable-dev-shm-usage")
+    options.add_argument('--disable-gpu')
     options.add_argument("--no-sandbox")
+    options.add_argument('log-level=3')
+    options.add_experimental_option("excludeSwitches", ["enable-logging"])
     driver = service = None
     global is_local_test, temp_info
     if is_local_test:
@@ -599,7 +602,7 @@ def get_latest_odds(date):
         home_extra_goal = list(map(int, match[4].split('-')))
         home_extra_goal = home_extra_goal[0] - home_extra_goal[1]
         handicap_info = get_handicap_odds(
-            match_id, recent_data['home_team'], recent_data['away_team'], home_extra_goal, f'{ {match[4]}} {match[5]}'
+            match_id, recent_data['home_team'], recent_data['away_team'], home_extra_goal, f'{ {match[4]}} {match[0]}'
         )
         if handicap_info is None:
             del matches_info[match_id]
