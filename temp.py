@@ -188,7 +188,7 @@ def get_recent_data(match_id):
             redirected = True
         except:
             print('Error in chromiun redirect...')
-            
+
     while True:
         try:
             temp_info['page_source'] = driver.page_source
@@ -201,7 +201,7 @@ def get_recent_data(match_id):
                 break
             print("refetch driver...", url)
             time.sleep(5)
-        except  Exception as e:
+        except Exception as e:
             print('get_recent_data error...', e)
         driver.refresh()
 

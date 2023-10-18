@@ -20,12 +20,16 @@ import s3fs
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-import chromedriver_autoinstaller
+# import chromedriver_autoinstaller
 from selenium.webdriver.support.ui import Select
 import pickle
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 # pd.options.display.max_columns = 24
+import warnings
+import cssutils
+warnings.filterwarnings('ignore')
 
 
 def connect_to_s3():
@@ -108,7 +112,7 @@ def requests_fetch(url, headers, payload={}, action="GET"):
             ):
                 break
         except Exception as e:
-            print(e)
+            print('requests_fetch:', e)
         print("refetch...", url)
         time.sleep(5)
     return response
@@ -143,7 +147,7 @@ async def asyncHTMLSessionFetch(url, headers, betting_companies=[]):
             if not needRefresh and  r.status_code == 200:
                 break
         except Exception as e:
-            print(e)
+            print('asyncHTMLSessionFetch:', e)
         print("asyncHTMLSessionFetch refetch...", soup)
         time.sleep(5)
     return soup_collection
@@ -173,24 +177,44 @@ def format_recent_df(selected_recent_data_df, home_team):
 
 
 def get_recent_data(match_id):
+    # match_id = '2337394'
     url = f"https://zq.titan007.com/analysis/{match_id}.htm"
     options = Options()
-    options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
-    options.add_argument("--headless") #無頭模式
+    options.add_argument("--headless")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--no-sandbox")
-    service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
+    driver = service = None
+    global is_local_test, temp_info
+    if is_local_test:
+        service = Service(executable_path=ChromeDriverManager().install())
+    else:
+        options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
+        service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
     driver = webdriver.Chrome(service=service, options=options)
-    driver.get(url)
+        
+    redirected = False
+    while not redirected:
+        try:
+            driver.get(url)
+            redirected = True
+        except:
+            print('Error in chromiun redirect...')
+
+    home_team = is_home_field = away_team = None
     while True:
         try:
-            temp_info['page_source'] = driver.page_source
+            temp_info['driver'] = driver
+            # driver.find_element(By.TAG_NAME, 'body').text
             if (
                 not (
-                    "操作太频繁了，请先歇一歇。" in temp_info['page_source']
-                    or "404 Not Found !" in temp_info['page_source']
+                    "操作太频繁了，请先歇一歇。" in driver.page_source
+                    or "404 Not Found !" in driver.page_source
                 )
             ):
+                home_team = driver.find_element(By.CLASS_NAME, "home").text.strip()
+                is_home_field = False if '(中)' in home_team else True
+                home_team = re.sub(r'\([^)]+\)', '', home_team)
+                away_team = driver.find_element(By.CLASS_NAME, "guest").text.strip()
                 break
             print("refetch driver...", url)
             time.sleep(5)
@@ -198,10 +222,6 @@ def get_recent_data(match_id):
             print('get_recent_data error...', e)
         driver.refresh()
 
-    home_team = driver.find_element(By.CLASS_NAME, "home").text.strip()
-    is_home_field = False if '(中)' in home_team else True
-    home_team = re.sub(r'\([^)]+\)', '', home_team)
-    away_team = driver.find_element(By.CLASS_NAME, "guest").text.strip()
     recent_table = driver.find_element(By.ID, "porlet_10")
     league_name = driver.find_element(By.CLASS_NAME, "LName").text.strip()
     selected_company_list = ["澳*", '36*', 'Crow*']
@@ -360,7 +380,18 @@ def get_had_df(match_id):
     return had_df
 
 
-def get_handicap_odds(match_id, home_team, away_team, match_info=[]):
+def update_match_result(handicap_df, match_result):
+    temp_col = "_" + match_result
+    handicap_df.loc[ handicap_df[match_result] == 0.0, temp_col] = 0
+    handicap_df.loc[(0 <  handicap_df[match_result]), temp_col] = 1
+    handicap_df.loc[ handicap_df[match_result] >= 0.5, temp_col] = 2
+    handicap_df.loc[(0 > handicap_df[match_result]), temp_col] = -1
+    handicap_df.loc[ handicap_df[match_result] <= -0.5, temp_col] = -2
+    handicap_df[match_result] = handicap_df[temp_col].astype(int)
+    del handicap_df[temp_col]
+    return handicap_df
+
+def get_handicap_odds(match_id, home_team, away_team, home_extra_goal,  match_info=[]):
     url = f"https://vip.titan007.com/AsianOdds_n.aspx?id={match_id}&l=1"
     headers = {
         "authority": "vip.titan007.com",
@@ -379,18 +410,24 @@ def get_handicap_odds(match_id, home_team, away_team, match_info=[]):
         "upgrade-insecure-requests": "1",
         "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
     }
+    
+    match_time = None
+    while True:
+        try:
+            response = requests_fetch(url, headers=headers)
+            if not response.text:
+                return None
+            print(
+                f"API: Company List Response Status: {response.status_code} ; {match_id} {home_team} {away_team} {match_info}"
+            )
+            soup = BeautifulSoup(response.text, "html.parser")
+            match_time = datetime.strptime(soup.find("span", {"class": "time"}).text.split('\xa0')[0], "%Y-%m-%d %H:%M")
+            break
+        except Exception as e:
+            global temp_info
+            temp_info['response'] = response
+            print("get_handicap_odds:", e)
 
-    response = requests_fetch(url, headers=headers)
-    print(
-        f"API: Company List Response Status: {response.status_code} ; {match_id} {home_team} {away_team} {match_info}"
-    )
-    soup = BeautifulSoup(response.text, "html.parser")
-    # home_team = [x.text for x in soup.select('.home') if len(x)][0]
-    # is_home_field = False if '(中)' in home_team else True
-    # home_team = re.sub(r'\([^)]+\)', '', home_team).strip()
-    # away_team = [x.text for x in soup.select('.guest') if len(x)][0].strip()
-
-    match_time = datetime.strptime(soup.find("span", {"class": "time"}).text.split('\xa0')[0], "%Y-%m-%d %H:%M")
     handicap_table = soup.find("table", {"id": "odds"})
     handicap_table_column = ['company', "multi_handicap_line", 'init_home_odds', 'init_handicap_line', 'init_away_odds', 'last_home_odds', 'last_handicap_line', 'last_away_odds', 'details']
     handicap_table_data = handicap_table.select('tr:not([style*="display: none"])')[2:]
@@ -402,7 +439,11 @@ def get_handicap_odds(match_id, home_team, away_team, match_info=[]):
         handicap_df = handicap_df[:-2]
         handicap_df = handicap_df.assign(numeric_init_handicap_line=handicap_df['init_handicap_line'].apply(convert_handicap_string_to_float))
         handicap_df = handicap_df.assign(numeric_last_handicap_line=handicap_df['last_handicap_line'].apply(convert_handicap_string_to_float))
-
+        handicap_df['init_match_result'] = handicap_df['numeric_init_handicap_line'] + home_extra_goal
+        handicap_df['last_match_result'] = handicap_df['numeric_last_handicap_line'] + home_extra_goal
+        handicap_df = update_match_result(handicap_df, 'init_match_result')
+        handicap_df = update_match_result(handicap_df, 'last_match_result')
+        
     global selected_handicap_company_list, selected_handicap_company_id_list, company_id_to_name
     changed_odds_url_dict = {
         "澳*": [],
@@ -419,8 +460,8 @@ def get_handicap_odds(match_id, home_team, away_team, match_info=[]):
             if company_id not in selected_handicap_company_id_list:
                 continue
             changed_odds_url_dict[company_id_to_name[company_id]].append(handicap_url)
-        except:
-            print('Cannot find companyID:', handicap_url, match)
+        except Exception as e:
+            print('Cannot find companyID:', handicap_url, match, e)
 
     changed_odds_dict = {}
     for company in changed_odds_url_dict:
@@ -536,14 +577,17 @@ def get_latest_odds(date):
     if len(daily_match_data) == 0:
         temp_daily_match_data = [row.find_all('td') for row in soup.find("table", {"id": "table_live"}).select('tr[infoid]')][1:]
         daily_match_data = [[x.text.strip() for x in row[:-1]] + [re.search(r'\((.*?)\)', row[-1].select('a:contains("析")')[0]['onclick']).group(1)] for row in temp_daily_match_data]
-
+        # daily_match_data = [[x.text.strip() for x in row[:-1]] + [cssutils.parseStyle(row[7].get('style')).getPropertyValue('color')] + [re.search(r'\((.*?)\)', row[-1].select('a:contains("析")')[0]['onclick']).group(1)] for row in temp_daily_match_data]
+    # else:
+    #     daily_match_data = [[x.text.strip() for x in row[:-1]] + [cssutils.parseStyle(row[7].get('style')).getPropertyValue('color')] + [row[-1]] for row in daily_match_data]
+    
     target_league = pd.read_csv("config/league.csv", header=None, encoding="utf8")
     target_league = target_league[target_league[0].notna()][0].unique().tolist()
 
     matches = []
     for match in daily_match_data:
         for league in target_league:
-            if league in match[0]:
+            if match[0].startswith(league) and match[2] == '完' and match[7]:
                 matches.append(match)
                 break
 
@@ -552,9 +596,15 @@ def get_latest_odds(date):
     for match in matches:
         match_id = match[-1]
         recent_data = get_recent_data(match_id)
+        home_extra_goal = list(map(int, match[4].split('-')))
+        home_extra_goal = home_extra_goal[0] - home_extra_goal[1]
         handicap_info = get_handicap_odds(
-            match_id, recent_data['home_team'], recent_data['away_team'], match[5]
+            match_id, recent_data['home_team'], recent_data['away_team'], home_extra_goal, f'{ {match[4]}} {match[5]}'
         )
+        if handicap_info is None:
+            del matches_info[match_id]
+            continue
+
         matches_info[match_id] = {
             "matchTime": handicap_info['match_time'],
             "handicap_df": handicap_info['handicap_df'],
@@ -569,11 +619,13 @@ def get_latest_odds(date):
         matches_info[match_id]['league'] = recent_data['league']
         matches_info[match_id]['home_team'] = recent_data['home_team']
         matches_info[match_id]['away_team'] = recent_data['away_team']
+        matches_info[match_id]['half_result'] = match[6]
+        matches_info[match_id]['full_result'] = match[4]
 
     temp_info['matches_info'] = matches_info
     return matches_info
 
-chromedriver_autoinstaller.install()
+# chromedriver_autoinstaller.install()
 company_to_info = {
     '香港马*': {'company_id': '48', 'url': [], 'odds': [], 'cid': '432'},
     '36*': {'company_id': '8', 'url': [], 'odds': [], 'cid': '281'},
@@ -635,20 +687,29 @@ temp_info = {}
 
 s3_bucket = 'football-screener/data'
 fs = connect_to_s3()
-
-# collected_date = [date[:-4] for date in os.listdir('data')]
-# cur_datetime = datetime.now()
 delta = dt.timedelta(days=1)
-# min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
-# target_date = datetime.strptime(min_date, '%Y%m%d') - delta
-target_date = dt.date(2022, 2, 1)
+target_date = None
+is_local_test = True
+
+if is_local_test:
+    collected_date = [date[:-4] for date in os.listdir('data')]
+    cur_datetime = datetime.now()
+    min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
+    target_date = datetime.strptime(min_date, '%Y%m%d') - delta
+    # target_date = dt.date(2022, 2, 1)
+else:
+    target_date = dt.date(2022, 2, 1)
+
 while True:
     formatted_date = target_date.strftime('%Y%m%d')
     matches_info = get_latest_odds(formatted_date)
-    # with open(os.path.join('data', f'{formatted_date}.pkl'), 'wb') as file:
-    #     pickle.dump(matches_info, file)
-
-    pickle.dump(matches_info, fs.open(f's3://{s3_bucket}/{formatted_date}.pkl', 'wb'))
-    # with open('data/20230925.pkl', 'rb') as file:
-    #     matches_info = pickle.load(file)
+    
+    if is_local_test:
+        with open(os.path.join('data', f'{formatted_date}.pkl'), 'wb') as file:
+            pickle.dump(matches_info, file)
+    else:
+        pickle.dump(matches_info, fs.open(f's3://{s3_bucket}/{formatted_date}.pkl', 'wb'))
     target_date -= delta
+
+# with open('data/20230913.pkl', 'rb') as file:
+#     matches_info = pickle.load(file)
