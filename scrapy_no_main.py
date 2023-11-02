@@ -701,6 +701,8 @@ target_date = None
 is_local_test = True
 
 if is_local_test:
+    if not os.path.exists('data'):
+        os.makedirs('data')
     collected_date = [date[:-4] for date in os.listdir('data')]
     cur_datetime = datetime.now()
     min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
