@@ -28,7 +28,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 # pd.options.display.max_columns = 24
 import warnings
-import cssutils
+# import cssutils
 warnings.filterwarnings('ignore')
 
 
@@ -349,6 +349,7 @@ def get_had_df(match_id):
             response = requests_fetch(url, headers=headers)
             if response is None:
                 return None
+            
             if not response or "var matchname" not in response.text:
                 continue
             else:
@@ -370,12 +371,13 @@ def get_had_df(match_id):
         "init_home_had", "init_draw_had", "init_away_had", "init_home_win_rate", "init_draw_win_rate", "init_away_win_rate", "init_returning_rate", 
         "last_home_had", "last_draw_had", "last_away_had", "last_home_win_rate", "last_draw_win_rate", "last_away_win_rate", "last_returning_rate",
         "home_kelly", "draw_kelly", "away_kelly",
-        "last_update_datetime", "masked_company_name", "unknown1", "unknown2"
+        "last_update_datetime", "unmasked_company_name", "unknown1", "unknown2"
     ]
     had_df = pd.DataFrame([x.split('|') for x in game], columns=columns)
-    had_df['masked_company_name'] = had_df['masked_company_name'].str.replace(r'\([^)]+\)', '', regex=True)
-    had_df = had_df.drop_duplicates(subset=['masked_company_name'], keep='first')
+    had_df['unmasked_company_name'] = had_df['unmasked_company_name'].str.replace(r'\([^)]+\)', '', regex=True)
+    had_df = had_df.drop_duplicates(subset=['unmasked_company_name'], keep='first')
 
+    had_df['masked_company_name'] = had_df['unmasked_company_name'].str[:-1] + '*'
     cid_to_company = had_df[['masked_company_name', 'cid']].set_index('cid').to_dict('index')
     cid_to_company = {k:v['masked_company_name'] for k, v in cid_to_company.items() if v['masked_company_name'] in company_to_info}
     had_df['company_id'] = had_df['masked_company_name'].map(lambda x: company_to_info[x]['company_id'] if x in company_to_info else np.nan)
@@ -394,7 +396,8 @@ def update_match_result(handicap_df, match_result):
     del handicap_df[temp_col]
     return handicap_df
 
-def get_handicap_odds(match_id, home_team, away_team, home_extra_goal,  match_info=[]):
+def get_handicap_odds(match_id, home_team, away_team, home_extra_goal, match_info=[]):
+    # match_id = '1969559'
     url = f"https://vip.titan007.com/AsianOdds_n.aspx?id={match_id}&l=1"
     headers = {
         "authority": "vip.titan007.com",
@@ -438,6 +441,7 @@ def get_handicap_odds(match_id, home_team, away_team, home_extra_goal,  match_in
     if len(handicap_table_data) > 2:
         handicap_table_data = [[data.text for data in row.select('td:not([style*="display: none"])')] for row in handicap_table_data]
         handicap_df = pd.DataFrame(handicap_table_data, columns=handicap_table_column)
+        handicap_df['company'] = handicap_df['company'].str.split('*').str[0]
         handicap_df = handicap_df.drop(['multi_handicap_line', "details"],  axis=1)
         handicap_df = handicap_df[:-2]
         handicap_df = handicap_df.assign(numeric_init_handicap_line=handicap_df['init_handicap_line'].apply(convert_handicap_string_to_float))
@@ -446,7 +450,7 @@ def get_handicap_odds(match_id, home_team, away_team, home_extra_goal,  match_in
         handicap_df['last_match_result'] = handicap_df['numeric_last_handicap_line'] + home_extra_goal
         handicap_df = update_match_result(handicap_df, 'init_match_result')
         handicap_df = update_match_result(handicap_df, 'last_match_result')
-        
+
     global selected_handicap_company_list, selected_handicap_company_id_list, company_id_to_name
     changed_odds_url_dict = {
         "澳*": [],
@@ -466,26 +470,28 @@ def get_handicap_odds(match_id, home_team, away_team, home_extra_goal,  match_in
         except Exception as e:
             print('Cannot find companyID:', handicap_url, match, e)
 
-    changed_odds_dict = {}
+    # changed_odds_dict = {}
+    flatten_odds_df = None
     for company in changed_odds_url_dict:
         temp_odds = []
         for handicap_url in changed_odds_url_dict[company]:
             changed_url = "https://vip.titan007.com" + handicap_url
-            temp_odds.append(get_odds_list(changed_url, home_team, away_team, match_time))
+            temp_odds.append(get_odds_list(changed_url, match_time))
 
         flatten_odds = list(itertools.chain(*temp_odds))
-        flatten_odds = [row for row in flatten_odds]
         flatten_odds_df = pd.DataFrame(flatten_odds)
         if len(flatten_odds_df) == 0:
             continue
-        handicap_line_dict = {}
-        for handicap_line, odds in flatten_odds_df.groupby(1):
-            odds_table =  odds.sort_values(3).drop_duplicates()
-            odds_table.columns = ['home_odds', 'handicap_line', 'away_odds', 'time', 'status', 'numeric_handicap_line']
-            
-            handicap_line_dict[handicap_line] = odds_table.loc[odds_table['status'] != '滾']
-        changed_odds_dict[company] = handicap_line_dict
-    return {'match_time': match_time, 'handicap_df': handicap_df, 'changed_odds_dict': changed_odds_dict}
+        flatten_odds_df = flatten_odds_df.sort_values(3).drop_duplicates()
+        flatten_odds_df.columns = ['home_odds', 'handicap_line', 'away_odds', 'time', 'status', 'numeric_handicap_line']
+        flatten_odds_df = flatten_odds_df.loc[flatten_odds_df['status'] != '滾']
+        # handicap_line_dict = {}
+        # for handicap_line, odds in flatten_odds_df.groupby(1):
+        #     odds_table = odds.sort_values(3).drop_duplicates()
+        #     odds_table.columns = ['home_odds', 'handicap_line', 'away_odds', 'time', 'status', 'numeric_handicap_line']
+        #     handicap_line_dict[handicap_line] = odds_table.loc[odds_table['status'] != '滾']
+        # changed_odds_dict[company] = handicap_line_dict
+    return {'match_time': match_time, 'handicap_df': handicap_df, 'changed_odds_dict': flatten_odds_df}
 
     # html_page = response.text
     # global company_list
@@ -511,7 +517,7 @@ def get_handicap_odds(match_id, home_team, away_team, home_extra_goal,  match_in
     # return matchTime, company_list
 
 
-def get_odds_list(odds_url, home_team, away_team, match_time):
+def get_odds_list(odds_url, match_time):
     headers = {
         "authority": "vip.titan007.com",
         "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -699,9 +705,9 @@ if is_local_test:
     cur_datetime = datetime.now()
     min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
     target_date = datetime.strptime(min_date, '%Y%m%d') - delta
-    # target_date = dt.date(2022, 2, 1)
+    # target_date = dt.date(2022, 2, 2)
 else:
-    target_date = dt.date(2022, 2, 1)
+    target_date = dt.date(2022, 2, 2)
 
 while True:
     formatted_date = target_date.strftime('%Y%m%d')
