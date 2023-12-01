@@ -26,6 +26,7 @@ import pickle
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+import shutil
 # pd.options.display.max_columns = 24
 import warnings
 # import cssutils
@@ -177,24 +178,31 @@ def format_recent_df(selected_recent_data_df, home_team):
 
 
 def get_recent_data(match_id):
-    # match_id = '2337394'
+    # match_id = '2104622'
     url = f"https://zq.titan007.com/analysis/{match_id}.htm"
     options = Options()
     options.add_argument("--headless")
     # options.add_argument("--disable-dev-shm-usage")
     options.add_argument('--disable-gpu')
     options.add_argument("--no-sandbox")
+    options.add_argument('--disable-dev-shm-usage')
     options.add_argument('log-level=3')
     options.add_experimental_option("excludeSwitches", ["enable-logging"])
     driver = service = None
     global is_local_test, temp_info
-    if is_local_test:
-        service = Service(executable_path=ChromeDriverManager().install())
-    else:
-        options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
-        service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
-    driver = webdriver.Chrome(service=service, options=options)
-        
+    while driver is None:
+        try:
+            if is_local_test:
+                service = Service(executable_path=ChromeDriverManager().install())
+            else:
+                options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
+                service = Service(executable_path=os.environ.get("CHROMEDRIVER_PATH"))
+            driver = webdriver.Chrome(service=service, options=options)
+        except:
+            print('Reinstall ChromeDriver...')
+            shutil.rmtree('/Users/wingsun/.wdm/drivers/chromedriver/mac64')
+
+
     redirected = False
     while not redirected:
         try:
@@ -221,10 +229,10 @@ def get_recent_data(match_id):
                 break
             print("refetch driver...", url)
             time.sleep(5)
-        except  Exception as e:
+        except Exception as e:
             print('get_recent_data error...', e)
         driver.refresh()
-
+    print("get_recent_data:", home_team, away_team)
     recent_table = driver.find_element(By.ID, "porlet_10")
     league_name = driver.find_element(By.CLASS_NAME, "LName").text.strip()
     selected_company_list = ["澳*", '36*', 'Crow*']
@@ -611,7 +619,7 @@ def get_latest_odds(date):
             match_id, recent_data['home_team'], recent_data['away_team'], home_extra_goal, f'{ {match[4]}} {match[0]}'
         )
         if handicap_info is None:
-            del matches_info[match_id]
+            # del matches_info[match_id]
             continue
 
         matches_info[match_id] = {
@@ -707,7 +715,7 @@ if is_local_test:
     cur_datetime = datetime.now()
     min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
     target_date = datetime.strptime(min_date, '%Y%m%d') - delta
-    # target_date = dt.date(2022, 2, 2)
+    # target_date = dt.date(2020, 1, 4)
 else:
     target_date = dt.date(2022, 2, 2)
 
