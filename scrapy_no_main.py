@@ -10,7 +10,7 @@ import datetime as dt
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-import pytz
+import glob
 from dotenv import load_dotenv
 load_dotenv(dotenv_path='./config/s3_connection.env')
 import fastparquet as fp
@@ -29,7 +29,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 import shutil
 # pd.options.display.max_columns = 24
 import warnings
-# import cssutils
 warnings.filterwarnings('ignore')
 
 
@@ -711,9 +710,10 @@ is_local_test = True
 if is_local_test:
     if not os.path.exists('data'):
         os.makedirs('data')
-    collected_date = [date[:-4] for date in os.listdir('data')]
+    collected_data = glob.glob(os.path.join('./data', '*.pkl'))
+    collected_data =  [os.path.splitext(os.path.basename(file))[0] for file in collected_data]
     cur_datetime = datetime.now()
-    min_date = min(collected_date) if len(collected_date) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
+    min_date = min(collected_data) if len(collected_data) > 0 else (cur_datetime - delta).strftime('%Y%m%d') if cur_datetime.hour < 12 else cur_datetime.strftime('%Y%m%d')
     target_date = datetime.strptime(min_date, '%Y%m%d') - delta
     # target_date = dt.date(2020, 1, 4)
 else:
