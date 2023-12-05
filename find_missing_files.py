@@ -23,6 +23,8 @@ def find_missing_pkl_files(start_date, end_date, folder_path):
 
 
 folder_path = '/Users/wingsun/Downloads/FYP2.0/'
-start_date = "20191223"
-end_date = "20231030"
+collected_data = glob.glob(os.path.join(folder_path, '*.pkl'))
+collected_data =  [os.path.splitext(os.path.basename(file))[0] for file in collected_data]
+start_date = min(collected_data)
+end_date = max(collected_data)
 missing_files = find_missing_pkl_files(start_date, end_date, folder_path)
